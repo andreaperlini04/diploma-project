@@ -1,4 +1,4 @@
-# C11326 — Moodle/EEG Synchronization Prototype
+Moodle/EEG Synchronization Prototype
 
 A prototype system for synchronizing behavioral data from a Moodle LMS with physiological (EEG) data from a wearable in-ear device, producing a unified chronological timeline for cognitive load research. Developed as a SUPSI (Scuola universitaria professionale della Svizzera italiana) Bachelor diploma project in Computer Science.
 
