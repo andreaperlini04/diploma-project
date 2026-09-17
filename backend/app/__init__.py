@@ -1,0 +1,34 @@
+from flask import Flask
+
+from app.api.cors import register_cors
+from app.api.ingest_routes import create_ingest_routes
+from app.config import Config
+from app.repository.clock_skew_repository import ClockSkewRepository
+from app.repository.session_repository import SessionRepository
+from app.repository.timeline_repository import TimelineRepository
+from app.services.session_service import SessionService
+from app.services.timeline_service import TimelineService
+
+
+def create_app(config_class=Config) -> Flask:
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    register_cors(app)
+
+    timeline_repository = TimelineRepository(app.config["DB_PATH"])
+    timeline_repository.init_schema()
+    session_repository = SessionRepository(app.config["DB_PATH"])
+    session_repository.init_schema()
+    clock_skew_repository = ClockSkewRepository(app.config["DB_PATH"])
+    clock_skew_repository.init_schema()
+
+    # Dependency injection manuale, esplicita.
+    session_service = SessionService(session_repository)
+    timeline_service = TimelineService(timeline_repository, session_service, clock_skew_repository)
+
+    # Un solo endpoint, /api/v1/events: envelope comune alle due sorgenti,
+    # discriminate sui campi source / event_type.
+    app.register_blueprint(create_ingest_routes(timeline_service))
+
+    return app

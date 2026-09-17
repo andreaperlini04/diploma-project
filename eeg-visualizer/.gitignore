@@ -1,0 +1,13 @@
+cli_log_idun*
+bands_log_idun*
+test_ntp_session.py
+logs/
+.venv/
+.pytest_cache/
+requirements-dev.txt
+.coverage
+
+# __pycache__/ senza prefisso di percorso vale a QUALSIASI livello: copre la
+# radice, front_end/ e tests/ senza bisogno di una riga per cartella.
+__pycache__/
+*.pyc

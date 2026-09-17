@@ -1,0 +1,155 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template qbank_managecategories/move_category_list
+
+    Partial to render a list of categories that the current category can be moved next to.
+
+    This partial is included recursively to render nested lists. Take care to pass categories = null for bottom-level
+    categories, to avoid infinite recursion.
+
+    Context variables required for this template:
+    * categories - Array of category objects.
+        * categoryid - The ID of the category to move relative to.
+        * movingcategoryid - The ID of the category we are moving.
+        * categoryname - The name of the category to move relative to.
+        * lastchild - Is this the last child of its parent? If true, an "after X" option will be rendered.
+        * precedingsiblingid - The ID of the preceding category under the same parent.
+        * parent - The ID of the parent category.
+        * newchild - If true, render this as a "new child of X" option rather than "before X".
+        * categories - Array containing child categories of this category.
+            If there are none, this must be to [] to avoid infinite recursion.
+
+    Example context (json):
+    {
+        "categories": [
+            {
+                "categoryid": "154001",
+                "movingcategoryid": 154007,
+                "precedingsiblingid": 0,
+                "parent": "154000",
+                "categoryname": "Default for Qbank 1",
+                "categories": [
+                    {
+                        "movingcategoryid": 154007,
+                        "precedingsiblingid": 0,
+                        "parent": "154001",
+                        "categoryname": "Default for Qbank 1",
+                        "categories": [],
+                        "newchild": true
+                    }
+                ]
+            },
+            {
+                "categoryid": "154004",
+                "movingcategoryid": 154007,
+                "precedingsiblingid": "154001",
+                "parent": "154000",
+                "categoryname": "Course category 1",
+                "categories": [
+                    {
+                        "categoryid": "154006",
+                        "movingcategoryid": 154007,
+                        "precedingsiblingid": 0,
+                        "parent": "154004",
+                        "categoryname": "Course category 3",
+                        "categories": [
+                            {
+                                "movingcategoryid": 154007,
+                                "precedingsiblingid": 0,
+                                "parent": "154006",
+                                "categoryname": "Course category 3",
+                                "categories": [],
+                                "newchild": true
+                            }
+                        ]
+                    },
+                    {
+                        "movingcategoryid": 154007,
+                        "precedingsiblingid": "154006",
+                        "parent": "154004",
+                        "categoryname": "Course category 3",
+                        "categories": [],
+                        "lastchild": true
+                    }
+                ]
+            },
+            {
+                "categoryid": "154005",
+                "movingcategoryid": 154007,
+                "precedingsiblingid": "154004",
+                "parent": "154000",
+                "categoryname": "Course category 2",
+                "categories": [
+                    {
+                        "movingcategoryid": 154007,
+                        "precedingsiblingid": 0,
+                        "parent": "154005",
+                        "categoryname": "Course category 2",
+                        "categories": [],
+                        "newchild": true
+                    }
+                ]
+            },
+            {
+                "movingcategoryid": 154007,
+                "precedingsiblingid": "154005",
+                "parent": "154000",
+                "categoryname": "Course category 2",
+                "categories": [],
+                "lastchild": true
+            }
+        ]
+    }
+}}
+
+<ul data-for="categorylist" data-contextid="{{contextid}}" role="group">
+    {{#categories}}
+        {{^lastchild}}
+            <li class="list_item d-flex" role="treeitem">
+                <a class="modal_category_item text-truncate" {{!
+                       }}href="#" {{!
+                       }}data-for="category" {{!
+                       }}data-movingcategoryid="{{movingcategoryid}}" {{!
+                       }}data-precedingsiblingid="{{precedingsiblingid}}" {{!
+                       }}data-parent="{{parent}}">
+                    {{#newchild}}
+                        {{#str}} newchild, qbank_managecategories, {{{categoryname}}} {{/str}}
+                    {{/newchild}}
+                    {{^newchild}}
+                        {{#str}} before, qbank_managecategories, {{{categoryname}}} {{/str}}
+                    {{/newchild}}
+                </a>
+            </li>
+            <li class="list_item d-flex" role="treeitem">
+                {{>qbank_managecategories/move_category_list}}
+            </li>
+        {{/lastchild}}
+        {{#lastchild}}
+            <li class="list_item d-flex" role="treeitem">
+                <a class="modal_category_item text-truncate" {{!
+                   }}href="#" {{!
+                   }}data-for="category" {{!
+                   }}data-movingcategoryid="{{movingcategoryid}}" {{!
+                   }}data-precedingsiblingid="{{precedingsiblingid}}" {{!
+                   }}data-parent="{{parent}}">
+                    {{#str}} after, qbank_managecategories, {{{categoryname}}} {{/str}}
+                </a>
+            </li>
+        {{/lastchild}}
+    {{/categories}}
+</ul>

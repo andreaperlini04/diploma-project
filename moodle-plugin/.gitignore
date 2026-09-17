@@ -1,0 +1,6 @@
+.idea
+/db/
+logs/
+moodledata/
+local/eegimucapture/eegimucapture.log
+local/eegimucapture/eegimucapture.jsonl

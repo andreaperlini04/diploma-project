@@ -1,0 +1,114 @@
+{{!
+    This file is part of Moodle - http://moodle.org/
+
+    Moodle is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    Moodle is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+}}
+{{!
+    @template core_customfield/list
+
+    Moodle list template.
+    The purpose of this template is to render a list.
+
+    Classes required for JS:
+    * none
+
+    Data attributes required for JS:
+    * data-component
+    * data-area
+    * data-itemid
+
+    Context variables required for this template:
+    * attributes Array of name / value pairs.
+
+    Example context (json):
+    {
+        "component": "core_nonexisting",
+        "area": "course",
+        "itemid": 0,
+        "usescategories": 1,
+        "canmovecategories": 1,
+        "canmovefields": 1,
+        "hascategories": true,
+        "hassharedcategories": true,
+        "categories": [
+            {
+                "id": "0",
+                "name": "Other fields",
+                "nameeditable": "Other fields",
+                "addfieldmenu": "Add field",
+                "canedit": true,
+                "fields": [
+                    { "id": 0, "name": "Field name", "shortname": "shortname", "type": "Text" },
+                    { "id": 0, "name": "Another field", "shortname": "checkme", "type": "Checkbox" }
+                ]
+            },
+            {
+                "id": "00",
+                "name": "Empty category",
+                "nameeditable": "Empty category",
+                "addfieldmenu": "Add field",
+                "canedit": true,
+                "fields": []
+            }
+        ]
+    }
+}}
+
+{{{alert}}}
+
+<div class="customfield-category-list"
+    id="customfield_catlist"
+    data-region="list-page"
+    data-component="{{component}}"
+    data-area="{{area}}"
+    data-itemid="{{itemid}}"
+>
+    <div class="d-flex justify-content-end">
+        {{#usescategories}}
+        <a tabindex="0" role="button" class="btn btn-primary" data-role="addnewcategory">{{#str}}addnewcategory, core_customfield{{/str}}</a>
+        {{/usescategories}}
+    </div>
+
+    {{^hascategories}}
+    <div class="alert alert-info mt-3">{{#str}}nocategories, core_customfield{{/str}}</div>
+    {{/hascategories}}
+
+    {{#hascategories}}
+    <div class="categorieslist">
+        {{#categories}}
+            {{#canedit}}
+            {{> core_customfield/category}}
+            {{/canedit}}
+        {{/categories}}
+    </div>
+    {{/hascategories}}
+
+    {{#hassharedcategories}}
+    <h2 class="mt-5">{{#str}} sharedcustomfields, customfield {{/str}}</h2>
+    <div class="sharedcategorieslist">
+        {{#categories}}
+            {{^canedit}}
+            {{> core_customfield/category}}
+            {{/canedit}}
+        {{/categories}}
+    </div>
+    {{/hassharedcategories}}
+</div>
+
+{{#js}}
+    require(['core_customfield/form', 'core_customfield/toggle_shared'], function(s, toggle) {
+        s.init();
+        toggle.init();
+    });
+{{/js}}

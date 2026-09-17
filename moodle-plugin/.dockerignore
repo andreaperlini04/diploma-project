@@ -1,0 +1,7 @@
+db
+moodledata
+logs
+.git
+.gitignore
+**/node_modules
+**/vendor

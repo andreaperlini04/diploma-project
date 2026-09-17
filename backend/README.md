@@ -1,0 +1,436 @@
+# syncronization_backend_moodle_idun
+
+Backend di raccolta dati per il progetto C11326. Riceve gli eventi prodotti da
+due sorgenti indipendenti — il client EEG (`EEGVisualizer.py`, IDUN Guardian 3)
+e il plugin Moodle `local_eegimucapture` — li persiste su SQLite e li rende
+disponibili per l'analisi su una timeline comune.
+
+L'obiettivo del sistema è correlare nel tempo l'attività cerebrale registrata
+dall'EEG con le azioni dello studente sulla piattaforma Moodle. Questo vincolo
+determina la maggior parte delle scelte progettuali descritte in seguito.
+
+
+## Architettura
+
+Tre livelli, con dipendenze a senso unico dall'alto verso il basso e
+dependency injection esplicita in `app/__init__.py`:
+
+| Livello | Cartella | Responsabilità |
+|---|---|---|
+| API | `app/api/` | Validazione del formato della richiesta, codici HTTP, CORS |
+| Servizi | `app/services/` | Logica di dominio; non dipende da Flask |
+| Repository | `app/repository/` | Unico accesso a SQLite; nessuna logica di dominio |
+
+Il livello dei servizi è indipendente dal framework web, in modo che la logica
+di ingestione sia verificabile senza avviare un server HTTP.
+
+
+## Installazione
+
+Serve Python 3.11 (versione dichiarata in `Pipfile`) e `pipenv`. Le dipendenze
+sono descritte da `Pipfile` e bloccate a versioni esatte da `Pipfile.lock`:
+entrambi sono versionati, l'ambiente virtuale no.
+
+```
+pip install --user pipenv
+pipenv install --dev
+```
+
+`pipenv install --dev` crea l'ambiente virtuale e installa esattamente le
+versioni del lock, dipendenze di test comprese. Non serve creare o attivare a
+mano nessuna cartella `venv`.
+
+
+## Avvio
+
+```
+pipenv run python run.py
+```
+
+Il server ascolta su `http://127.0.0.1:8000`. I parametri (porta, percorso del
+database, origini CORS ammesse) sono in `app/config.py`.
+
+In alternativa `pipenv shell` apre una shell con l'ambiente già attivo, dove i
+comandi si scrivono senza il prefisso `pipenv run`.
+
+
+## Contratto di ingestione
+
+```
+POST /api/v1/events
+Content-Type: application/json
+```
+
+Questo è l'unico endpoint esposto. Entrambe le sorgenti usano lo stesso URL, la
+stessa struttura di messaggio e ricevono la stessa risposta; la distinzione
+avviene sui campi `source` e `event_type`, non sull'indirizzo.
+
+La scelta di un endpoint unico deriva dalla natura dei dati. Il flusso non è un
+insieme di risorse da creare e modificare, ma un registro cronologico ad
+accodamento (*append-only*) di eventi eterogenei provenienti da due sorgenti,
+da ricomporre in un'unica sequenza temporale. Anche l'inizio e la fine di una
+sessione sono eventi del registro: la sessione non è una risorsa separata, ma
+un'informazione ricavata dalla sequenza. Da questa impostazione derivano il
+nome dell'endpoint e l'assenza di verbi separati per aprire o chiudere una
+sessione.
+
+### Struttura del messaggio
+
+Il corpo della richiesta è un **array JSON di eventi**, anche quando contiene
+un solo elemento. Per tolleranza, un oggetto singolo non incapsulato viene
+comunque accettato.
+
+```json
+[
+  {
+    "session_id": "20260812_114414",
+    "timestamp": 1786527854.0963,
+    "source": "eeg",
+    "event_type": "sample",
+    "payload": { "delta": 47.63, "theta": 12.63, "alpha": 5.986,
+                 "sigma": 1.826, "beta": 5.341, "gamma": 0.8174 }
+  }
+]
+```
+
+| Campo | Obbligatorio | Note |
+|---|---|---|
+| `source` | sì | `"eeg"` oppure `"moodle"`; qualunque altro valore rende l'evento non valido |
+| `event_type` | sì | vedi *Tipi di evento* |
+| `timestamp` | sì | epoch in secondi o millisecondi (vedi sotto) |
+| `session_id` | dipende | obbligatorio per `source: "eeg"`; assente per gli eventi Moodle, che lo ricevono dal backend |
+| `payload` | no | oggetto JSON; un valore non-oggetto viene incapsulato in `{"value": ...}` |
+| `description` | no | se assente o `null`, la calcola il backend (vedi *Descrizioni*) |
+| `user_id` | no | studente Moodle; se assente viene letto da `payload.context.user_id`, altrimenti dalla sessione (vedi *Identificatore utente*) |
+
+Un evento privo di `source` o di `event_type`, o con un `source` diverso dai
+due previsti, viene contato come non valido e saltato, senza far fallire la
+richiesta. Questa tolleranza è necessaria perché il client EEG non dispone di
+un meccanismo di ritrasmissione automatica: un errore su una singola riga
+farebbe perdere l'intera sessione, che contiene tipicamente da 300 a 800
+campioni.
+
+Un `source` non riconosciuto viene scartato invece di essere trattato come
+Moodle per esclusione: erediterebbe l'identificatore della sessione EEG attiva
+e una descrizione calcolata, entrando nella timeline come un evento legittimo.
+
+### Risposta
+
+Codice `201` con un riepilogo dell'esito:
+
+```json
+{ "received": 5, "stored": 5, "duplicates": 0, "invalid": 0,
+  "no_timestamp": 0, "clock_skew_samples": 0, "rows_attributed": 0,
+  "sessions_opened": ["20260812_114414"], "sessions_superseded": [],
+  "sessions_closed": [], "sessions_autoregistered": [] }
+```
+
+Il riepilogo serve alla verifica manuale e ai test; i client si limitano a
+registrarlo nel proprio log. Due contatori vanno interpretati con attenzione:
+`duplicates` indica righe già presenti, quindi un esito normale in caso di
+ritrasmissione, mentre `no_timestamp` indica **dati perduti**.
+`rows_attributed` conta le righe già scritte a cui questa richiesta ha
+assegnato uno studente (vedi *Identificatore utente*): non sono righe nuove e
+non entrano in `stored`.
+
+La scrittura è sincrona: l'inserimento di 500 campioni richiede circa 20 ms,
+ampiamente entro il timeout di 10 s del client. Non è quindi necessaria una
+coda asincrona.
+
+
+## Il campo `timestamp`
+
+### Formato
+
+Sono accettati sia i secondi sia i millisecondi dall'epoch Unix. La
+discriminazione avviene con una soglia a `1e11`: valori superiori sono
+interpretati come millisecondi e divisi per 1000, valori inferiori come
+secondi. La soglia è priva di ambiguità perché `1e11` secondi corrisponde
+all'anno 5138, mentre `1e11` millisecondi corrisponde al 1973: nessun
+timestamp plausibile cade nell'intervallo sbagliato.
+
+Il client EEG invia secondi in virgola mobile, il plugin Moodle millisecondi
+interi. Entrambi i formati sono gestiti senza conversione a monte. Il valore
+memorizzato è sempre in secondi.
+
+### Obbligatorietà
+
+Un evento il cui `timestamp` sia assente, `null`, non numerico, nullo o
+negativo viene scartato e conteggiato in `no_timestamp`. Non è previsto alcun
+ripiego sull'istante di arrivo al backend.
+
+La motivazione è metodologica. Il ritardo introdotto dalla rete e
+dall'accodamento è ignoto e variabile, quindi un timestamp assegnato al momento
+della ricezione collocherebbe l'evento in una posizione errata della timeline.
+Poiché la finalità del sistema è misurare la relazione temporale fra segnale
+EEG e attività dello studente, un evento collocato in modo errato compromette
+l'analisi in modo silenzioso, mentre un evento scartato resta visibile nel
+contatore.
+
+### Requisito di risoluzione
+
+Il vincolo di unicità della tabella `timeline` è
+`UNIQUE(session_id, source, event_type, ts)` e **non comprende il payload**.
+Due eventi dello stesso tipo con lo stesso timestamp sono quindi
+indistinguibili e uno dei due viene scartato come duplicato.
+
+Ne segue che la risoluzione della sorgente del timestamp è vincolante: con
+risoluzione di un secondo, tutti gli eventi dello stesso tipo emessi entro
+quel secondo collassano in una sola riga. Su cinque eventi `input_change`
+emessi entro un secondo:
+
+| Sorgente | Risoluzione | Righe conservate |
+|---|---|---|
+| PHP `time()` | 1 s | 1 su 5 |
+| JavaScript `Date.now()` | 1 ms | 5 su 5 |
+| PHP `microtime(true)` | ~1 µs | 5 su 5 |
+
+La risoluzione minima richiesta è quindi il millisecondo. Per riferimento, il
+dispositivo IDUN campiona a 250 Hz circa, ossia un campione ogni ~4 ms.
+
+
+## Tipi di evento
+
+### Sorgente `eeg`
+
+| `event_type` | Effetto |
+|---|---|
+| `session_start` | apre la sessione con l'identificatore scelto dal client e la rende attiva; la riga è comunque registrata in `timeline` |
+| `sample` | riga in `timeline`; il payload contiene le sei potenze assolute di banda |
+| `session_end` | chiude la sessione e ne aggiorna `row_count` |
+| `ntp_check` | riga in `timeline`; verifica diagnostica di sincronizzazione dell'orologio |
+
+### Sorgente `moodle`
+
+Ogni evento produce una riga in `timeline`, con `session_id` assegnato dal
+backend. Unica eccezione:
+
+| `event_type` | Effetto |
+|---|---|
+| `clock_skew_measured` | scritto nella tabella `clock_skew`, non in `timeline`: è una misura diagnostica sullo scostamento fra gli orologi, non un comportamento dello studente |
+
+L'elenco dei tipi riconosciuti è in `app/services/moodle_descriptions.py`. Un
+tipo non presente in quell'elenco viene comunque registrato: cambia solo la
+descrizione associata.
+
+
+## Correlazione delle sessioni
+
+È il meccanismo che rende possibile l'analisi congiunta delle due sorgenti.
+
+1. Il client EEG genera l'identificatore di sessione e lo comunica con
+   l'evento `session_start`. È l'unica autorità sull'identificatore.
+2. Il backend conserva in memoria la sessione attiva corrente.
+3. Il plugin Moodle non conosce l'identificatore e non lo invia: il backend
+   assegna a ciascun evento Moodle quello della sessione attiva al momento
+   della ricezione.
+
+Da questo derivano tre comportamenti:
+
+- **Nessuna sessione attiva.** L'evento Moodle è registrato con `session_id`
+  nullo, non scartato: resta riallineabile in base al timestamp. Perché i dati
+  risultino correlati, `session_start` deve precedere gli eventi Moodle.
+- **Una sola sessione attiva per volta.** Un nuovo `session_start` chiude la
+  sessione precedente, che viene riportata in `sessions_superseded`. Questo
+  evita che una sessione resti aperta indefinitamente quando il client termina
+  in modo anomalo, e rende non ambigua l'attribuzione degli eventi successivi.
+- **Sessioni non annunciate.** Se la richiesta contenente `session_start` non
+  arriva a destinazione, il client prosegue la registrazione locale e invia i
+  campioni al termine. Il backend registra allora la sessione al primo campione
+  ricevuto, segnalandola in `sessions_autoregistered`, invece di rifiutare i
+  dati.
+
+Lo stato della sessione attiva è mantenuto in memoria e non è persistito: al
+riavvio del backend la sessione in corso va considerata interrotta.
+
+
+## Idempotenza
+
+L'inserimento avviene con `INSERT OR IGNORE` sul vincolo di unicità descritto
+sopra. La ritrasmissione di un batch già ricevuto non produce duplicati, ed è
+quindi un'operazione sicura.
+
+Nel vincolo, le righe con `session_id` nullo sono sempre considerate distinte
+fra loro, coerentemente con il trattamento di `NULL` in SQL. Gli eventi
+registrati fuori sessione non vengono perciò mai scartati come duplicati.
+
+
+## Descrizioni
+
+Ogni riga di `timeline` porta una descrizione testuale leggibile dell'evento,
+usata per l'ispezione manuale della sequenza.
+
+Le descrizioni sono generate dal backend per tutti gli eventi: il plugin invia
+`description: null` sia per gli eventi rilevati nel browser sia per quelli
+originati dal server Moodle. Il modulo `app/services/moodle_descriptions.py` è
+l'unica origine dei testi.
+
+## Identificatore utente
+
+Gli eventi Moodle portano nel payload un oggetto `context` con i dati
+dell'ambiente in cui l'evento è avvenuto, fra cui l'identificatore dello
+studente:
+
+```json
+"context": { "user_id": 2, "course_id": 1, "course_name": "Neuroscienze", ... }
+```
+
+Il backend lo promuove a colonna di primo livello della tabella `timeline`,
+così da renderlo interrogabile senza estrarlo dal JSON a ogni query. La regola
+di precedenza è:
+
+1. campo `user_id` al livello superiore del messaggio, se presente;
+2. altrimenti `payload.context.user_id`;
+3. altrimenti lo studente già noto della sessione (vedi sotto);
+4. altrimenti `NULL`.
+
+L'estrazione non dipende dal `source`, ma il client EEG non conosce l'utente
+Moodle e non lo invierà mai: sui suoi eventi il campo arriverebbe sempre nullo.
+
+### Attribuzione per sessione
+
+L'unica cosa che le due sorgenti condividono è il `session_id`. Il backend
+sfrutta questo: impara lo studente dal primo evento Moodle della sessione e lo
+estende a tutte le righe della stessa sessione, campioni EEG compresi.
+
+Lo stato vive in una mappa `session_id -> user_id` in `SessionService`, con la
+colonna `sessions.user_id` come fonte persistente dietro alla cache. La cache
+memorizza anche il risultato negativo: senza, un lotto EEG di una sessione
+priva di utente costerebbe una `SELECT` per campione.
+
+L'utente si impara però *in corsa*, e tre casi restano scoperti
+dall'attribuzione al momento della scrittura:
+
+- `session_start` precede sempre il primo evento Moodle;
+- un lotto EEG può arrivare prima di qualsiasi attività nel browser;
+- dentro un singolo lotto le righe si costruiscono tutte prima dell'`INSERT`,
+  quindi un campione che precede l'evento Moodle non può leggerne l'utente.
+
+Per questo, a fine ingestione, ogni sessione toccata di cui si conosce
+l'utente riceve una `UPDATE` di ripescaggio:
+
+```sql
+UPDATE timeline SET user_id = ? WHERE session_id = ? AND user_id IS NULL
+```
+
+Una sola istruzione per sessione, non per riga. Il filtro `user_id IS NULL`
+non tocca mai un valore già scritto, quindi ripeterla è innocuo. Le righe
+attribuite così sono contate in `rows_attributed` nella risposta.
+
+Il **primo utente osservato vince** e resta, sia in memoria sia sul database
+(`COALESCE(user_id, ?)`). Una sessione appartiene a uno studente solo: un
+secondo `user_id` sulla stessa sessione è un'anomalia — due account sulla
+stessa macchina — e riscrivere l'attribuzione lascerebbe righe EEG assegnate a
+studenti diversi senza modo di dire quale sia quella giusta. L'evento del
+secondo utente conserva comunque il proprio `user_id`, che è un dato osservato
+e non un'inferenza.
+
+Un riavvio del backend perde la mappa in memoria ma non l'attribuzione: i
+campioni di una sessione arrivano allo Stop e possono cadere dopo il riavvio,
+quindi `user_for()` ripiega sulla colonna `sessions.user_id`.
+
+Restano nulli gli eventi di una sessione in cui il plugin non si è mai fatto
+sentire, e quelli registrati fuori sessione (`session_id` nullo): non c'è
+nessuna sessione a cui appenderli.
+
+Entrambe le colonne sono state introdotte su un database già popolato: le
+righe scritte in precedenza hanno `user_id` nullo. `init_schema()` le aggiunge
+con una `ALTER TABLE` racchiusa in un `try/except`, perché SQLite non supporta
+`ADD COLUMN IF NOT EXISTS`.
+
+
+## Schema del database
+
+File SQLite in `sessions/timeline.db`, in modalità WAL.
+
+**`timeline`** — la sequenza di eventi.
+
+| Colonna | Tipo | Note |
+|---|---|---|
+| `id` | INTEGER | chiave primaria |
+| `session_id` | TEXT | nullo se l'evento è fuori sessione |
+| `ts` | REAL | epoch in secondi |
+| `source` | TEXT | `eeg` o `moodle` |
+| `event_type` | TEXT | |
+| `payload` | TEXT | oggetto JSON |
+| `description` | TEXT | vuota per gli eventi EEG |
+| `user_id` | INTEGER | studente Moodle; sugli eventi EEG arriva dalla sessione |
+
+Vincolo `UNIQUE(session_id, source, event_type, ts)`; indice su
+`(session_id, ts)`.
+
+**`sessions`** — anagrafica delle sessioni: `session_id`, `started_at`,
+`stopped_at`, `row_count`, `user_id` (studente della sessione, appreso dagli
+eventi Moodle; fonte autorevole per l'attribuzione delle righe EEG).
+
+**`clock_skew`** — misure diagnostiche dello scostamento fra orologi:
+`session_id`, `ts`, `skew_ms`, `uncertainty_ms`, `rtt_min_ms`, `samples`.
+
+
+## Test
+
+`pytest` e `pytest-cov` sono dichiarati fra le `dev-packages` del `Pipfile`:
+`pipenv install --dev` li installa insieme al resto, non serve altro.
+
+Esecuzione dell'intera suite:
+
+```
+pipenv run pytest
+```
+
+Con la copertura del codice, e l'elenco delle righe che nessun test esegue:
+
+```
+pipenv run pytest --cov=app --cov-report=term-missing
+```
+
+`pytest.ini` fissa `testpaths = tests` e `pythonpath = .`, quindi la suite parte
+dalla radice del progetto senza indicare la cartella né manipolare `PYTHONPATH`.
+
+Ogni test riceve un database su file temporaneo, creato e rimosso da pytest:
+l'esecuzione non tocca `sessions/timeline.db` e non altera i dati raccolti.
+
+Varianti utili:
+
+| Comando | Effetto |
+|---|---|
+| `pipenv run pytest -v` | un test per riga, con esito singolo |
+| `pipenv run pytest -x` | si ferma al primo fallimento |
+| `pipenv run pytest tests/test_ingest_contract.py` | un solo file |
+| `pipenv run pytest -k timestamp` | solo i test il cui nome contiene "timestamp" |
+
+Una copertura alta non garantisce che i test siano significativi: indica quali
+righe vengono eseguite, non se il loro effetto viene verificato. Le righe
+scoperte residue riguardano gli header CORS, il corpo della richiesta non
+interpretabile come JSON e alcuni rami difensivi che il contratto attuale non
+produce.
+
+### Composizione della suite
+
+| File | Tipo | Oggetto |
+|---|---|---|
+| `tests/test_ingest_contract.py` | integrazione | `POST /api/v1/events` attraverso tutti i livelli: route, servizio, repository, SQLite. Nessun mock |
+| `tests/test_session_service.py` | unità | `SessionService` isolato: apertura, sostituzione e chiusura della sessione, autoregistrazione |
+| `tests/test_moodle_descriptions.py` | unità | i modelli di descrizione, funzioni pure senza app né database |
+
+Le fixture condivise sono in `tests/conftest.py`. La suite non comprende test
+end-to-end: verificarli richiederebbe il backend in esecuzione come processo
+separato, con il client EEG e il plugin reali.
+
+### Verificare che un test sia significativo
+
+Un test verde può non controllare nulla. Per accertarsene, si introduce
+deliberatamente un guasto e si verifica che la suite lo rilevi. Esempio su
+`_coerce_ts` in `app/services/timeline_service.py`: sostituire i due
+`return None` con `return time.time()`, ripristinando il ripiego sull'istante
+di arrivo. L'esecuzione deve segnalare il fallimento dei sei casi di
+`test_event_without_valid_timestamp_is_rejected`. Ripristinato il codice, la
+suite torna verde.
+
+
+## Ispezione del database
+
+```
+python check_db.py     # ultimi eventi in timeline
+python check_skew.py   # ultime misure di scostamento
+```

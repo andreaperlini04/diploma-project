@@ -1,0 +1,177 @@
+$login-layout-left-bg: $primary !default;
+$login-layout-panel-bg: darken($login-layout-left-bg, 25%);
+$login-layout-panel-padding: 3rem !default;
+$login-layout-content-width: 576px !default;
+$login-layout-copy-width: 450px !default;
+$login-input-bg: $gray-100 !default;
+
+.pagelayout-login {
+    #region-main,
+    #region-main-box {
+        border: 0;
+        background-color: transparent;
+    }
+
+    #page {
+        margin: 0;
+        min-height: 100vh;
+        background-color: $white;
+    }
+}
+
+.login-layout-left {
+    background-color: $login-layout-left-bg;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: $login-layout-panel-padding;
+}
+
+.login-layout-left-content {
+    max-width: $login-layout-copy-width;
+    text-align: center;
+    color: color-contrast($login-layout-panel-bg);
+    background-color: rgba($login-layout-panel-bg, 0.65);
+    border-radius: $border-radius;
+    padding: $spacer;
+    margin-bottom: 5rem;
+    blockquote {
+        color: inherit;
+        border-left: 5px solid color-contrast($login-layout-panel-bg);
+    }
+    a {
+        color: inherit;
+        text-decoration: underline;
+    }
+}
+
+.login-layout-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-items: center;
+}
+
+.login-layout-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.login-layout-stat-value {
+    font-size: $h5-font-size;
+    line-height: 1;
+}
+
+.login-layout-right {
+    min-height: 100vh;
+    padding: $login-layout-panel-padding;
+    display: flex;
+    justify-content: center;
+}
+
+.login-layout-right-content {
+    width: 100%;
+    max-width: $login-layout-content-width;
+    margin: auto 0;
+}
+
+.login-container {
+    .login-form {
+        .form-control {
+            background-color: $login-input-bg;
+            box-shadow: none;
+
+            &:hover {
+                background-color: $login-input-bg;
+            }
+
+            &:focus {
+                background-color: $login-input-bg;
+                border-color: $input-focus-border-color;
+                box-shadow: $input-focus-box-shadow;
+            }
+        }
+
+        .toggle-sensitive-wrapper .toggle-sensitive-btn {
+            --bs-btn-bg: #{$login-input-bg};
+            --bs-btn-border-color: #{$input-border-color};
+            --bs-btn-hover-bg: #{$login-input-bg};
+            --bs-btn-hover-border-color: #{$input-border-color};
+            --bs-btn-active-bg: #{$login-input-bg};
+            --bs-btn-active-border-color: #{$input-border-color};
+            border-inline-start: none;
+            color: $gray-700;
+
+            &:focus,
+            &:focus-visible {
+                background-color: $login-input-bg;
+                border-color: $input-focus-border-color;
+                box-shadow: $input-focus-box-shadow;
+            }
+        }
+    }
+
+    .login-separator {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: $gray-600;
+        font-size: $font-size-sm;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+
+        &::before,
+        &::after {
+            content: "";
+            flex: 1;
+            border-top: $border-width solid $border-color;
+        }
+    }
+
+    .login-identityprovider-btn {
+        width: 100%;
+        background-color: $white;
+        border-color: $gray-400;
+        color: $gray-600;
+
+        &:hover,
+        &:focus {
+            background-color: $gray-100;
+            border-color: $gray-500;
+        }
+    }
+
+    .login-cookiesnotice {
+        .btn-link {
+            font-size: $font-size-sm;
+            color: $gray-600;
+
+            &:hover,
+            &:focus {
+                color: $gray-700;
+            }
+        }
+    }
+
+    .login-languagemenu {
+        .dropdown-menu {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    }
+}
+
+@include media-breakpoint-down(lg) {
+    .login-layout-right {
+        padding: 1.5rem 1rem;
+    }
+
+    .login-layout-right-content {
+        max-width: 100%;
+        margin: 0;
+    }
+}

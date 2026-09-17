@@ -1,0 +1,32 @@
+# core_form (subsystem) Upgrade notes
+
+## 5.2
+
+### Removed
+
+- - The following methods have been removed from `public/lib/antivirus/clamav/classes/scanner.php`:
+    - `\antivirus_clamav\scanner::scan_data_execute_unixsocket()`
+    - `\antivirus_clamav\scanner::scan_file_execute_unixsocket()`
+  - The following methods have been removed from `public/lib/form/classes/filetypes_util.php`:
+    - `\core_form\filetypes_util::is_whitelisted()`
+    - `\core_form\filetypes_util::get_not_whitelisted()`
+
+  For more information see [MDL-87426](https://tracker.moodle.org/browse/MDL-87426)
+
+## 5.0
+
+### Changed
+
+- The `cohort` form element now accepts new `includes` option, which is passed to the corresponding external service to determine which cohorts to return (self, parents, all)
+
+  For more information see [MDL-83641](https://tracker.moodle.org/browse/MDL-83641)
+
+## 4.5
+
+### Added
+
+- The `duration` form field type has been modified to validate that the supplied value is a positive value.
+  Previously it could be any numeric value, but every usage of this field in Moodle was expecting a positive value. When a negative value was provided and accepted, subtle bugs could occur.
+  Where a negative duration _is_ allowed, the `allownegative` attribute can be set to `true`.
+
+  For more information see [MDL-82687](https://tracker.moodle.org/browse/MDL-82687)

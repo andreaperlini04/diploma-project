@@ -1,0 +1,45 @@
+input.tool-mfa-verification-code,
+.tool-mfa-verification-code input {
+    font-family: monospace;
+    text-align: center;
+    letter-spacing: 1.0em;
+    font-weight: bold;
+    margin-top: 0.25rem;
+    background-color: #e9ecef;
+    border-color: #6a737b;
+}
+
+.mfa-verify-form .form-group.fitem,
+.mfa-verify-form .form-group.fitem > span,
+.mfa-verify-form .form-group.fitem > span > input {
+    width: 100%;
+}
+
+input.tool-mfa-verify-submit,
+.tool-mfa-verify-submit input {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+#mfalist .icon-circle .icon {
+    width: 64px;
+    height: 64px;
+}
+
+@media (max-width: 991.98px) {
+    .tool-mfa-verify-container {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+
+    .login-layout-right-content:has(.tool-mfa-verify-container) {
+        margin-top: 0;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .tool-mfa-verify-container .mfa-verify-form {
+        margin-right: -16px;
+        margin-left: -16px;
+    }
+}

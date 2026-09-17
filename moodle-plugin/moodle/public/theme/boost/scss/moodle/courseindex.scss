@@ -1,0 +1,266 @@
+$courseindex-link-color: $list-group-action-color !default;
+$courseindex-link-color-selected: color-contrast($primary) !default;
+$courseindex-link-dimmed-color: $gray-600 !default;
+$courseindex-link-hover-color: black !default;
+$courseindex-item-dragging-bg: shift-color($info, -90%) !default;
+$courseindex-item-dragging-border: shift-color($info, -70%) !default;
+$courseindex-item-active-border: $gray-300 !default;
+$courseindex-item-active-bg: $gray-100 !default;
+$courseindex-item-page-bg: $primary !default;
+$courseindex-item-padding-y: 0.5rem;
+$courseindex-item-padding-x: 0.5rem;
+$courseindex-item-radius: $border-radius !default;
+$courseindex-item-current: $primary !default;
+
+@mixin courseindex-item-hover() {
+    &:hover,
+    &:focus {
+        color: $courseindex-link-hover-color;
+
+        .courseindex-link,
+        .courseindex-chevron {
+            color: $courseindex-link-hover-color;
+            cursor: pointer;
+        }
+        &.dimmed {
+            color: $courseindex-link-hover-color;
+
+            .courseindex-link,
+            .courseindex-chevron {
+                color: $courseindex-link-hover-color;
+            }
+        }
+        &.draggable {
+            cursor: move;
+        }
+        &.pageitem,
+        .pageitem {
+            background-color: darken($courseindex-item-page-bg, 7.5%);
+            color: darken($courseindex-link-color-selected, 10%);
+            .courseindex-link,
+            .courseindex-chevron {
+                color: darken($courseindex-link-color-selected, 10%);
+                a {
+                    color: darken($courseindex-link-color-selected, 10%);
+                }
+            }
+        }
+    }
+}
+
+@mixin courseindex-item-dragging() {
+    &.dragging {
+        border: $border-width solid $courseindex-item-dragging-border;
+        background-color: $courseindex-item-dragging-bg;
+    }
+}
+
+.drawerheader {
+    .drawerheading {
+        min-width: 0;
+        flex: 1 1 auto;
+        #courseindexdrawerheading {
+            font-size: $font-size-base;
+            margin-left: map-get($spacers, 3);
+            min-width: 0;
+            overflow: hidden;
+            .courseindex-link {
+                display: block;
+                max-width: 100%;
+                text-overflow: ellipsis;
+                color: $courseindex-link-color;
+                &:hover,
+                &:focus {
+                    color: $courseindex-link-hover-color;
+                    text-decoration: none;
+                }
+            }
+        }
+        i.icon {
+            color: $courseindex-link-color;
+        }
+    }
+}
+
+.courseindex {
+    // Both activity and section items.
+    .courseindex-item {
+        align-items: center;
+        padding: $courseindex-item-padding-y $courseindex-item-padding-x;
+        border: $border-width solid transparent;
+        @include border-radius($courseindex-item-radius);
+
+        &.courseindex-section-title a {
+            font-weight: bold;
+        }
+
+        .icons-collapse-expand {
+            padding-right: 4px;
+        }
+
+        .courseindex-link {
+            font-size: $font-size-base * 0.875;
+        }
+
+        .courseindex-link,
+        .courseindex-chevron {
+            color: $courseindex-link-color;
+            &:hover,
+            &:focus {
+                color: $courseindex-link-hover-color;
+                text-decoration: none;
+            }
+        }
+
+        @include courseindex-item-hover();
+
+        @include courseindex-item-dragging();
+
+        &.active {
+            background-color: $courseindex-item-active-bg;
+            border-color: $courseindex-item-active-border;
+        }
+
+        // Hidden elements.
+        &.dimmed {
+            color: $courseindex-link-dimmed-color;
+
+            .courseindex-link,
+            .courseindex-chevron {
+                color: $courseindex-link-dimmed-color;
+            }
+
+            .pageitem {
+                .courseindex-link,
+                .courseindex-chevron {
+                    color: $courseindex-link-color-selected;
+                }
+            }
+        }
+
+        // Restrictions icon.
+        .courseindex-locked {
+            display: none;
+        }
+        &.restrictions {
+            .courseindex-locked {
+                display: block;
+            }
+
+            // Current restricted item.
+            &.pageitem {
+                color: $courseindex-link-color-selected;
+                a {
+                    color: $courseindex-link-color-selected;
+                }
+            }
+
+        }
+
+        // Current page item.
+        &.pageitem {
+            background-color: $courseindex-item-page-bg;
+            color: $courseindex-link-color-selected;
+            scroll-margin: 6rem;
+            a {
+                color: $courseindex-link-color-selected;
+            }
+        }
+
+        // Completion.
+        .completioninfo {
+            min-width: 20px;
+
+            &.completion_complete {
+                color: $success;
+            }
+
+            &.completion_fail {
+                color: $danger;
+            }
+        }
+
+        &.indented {
+            margin-left: map-get($spacers, 3);
+        }
+    }
+
+    // The full section collapsable.
+    .courseindex-section {
+
+        @include courseindex-item-dragging();
+
+        border-left: solid 3px transparent;
+
+        .current-badge {
+            line-height: $line-height-base;
+            display: none;
+        }
+
+        &.current {
+            border-left: solid 3px $courseindex-item-current;
+
+            .current-badge {
+                display: inline-block;
+            }
+
+            /* Skip current badges in delegated sections. */
+            .delegated-section .current-badge {
+                display: none;
+            }
+        }
+
+        .delegated-section {
+            .courseindex-section-title {
+                margin-left: -(map-get($spacers, 1));
+                padding-left: 0 !important; /* stylelint-disable-line declaration-no-important */
+            }
+            .courseindex-item-content {
+                margin-left: -(map-get($spacers, 2));
+            }
+        }
+
+        &.dropready .courseindex-item-content {
+            /* Extra dropzone space */
+            padding-bottom: 1em;
+        }
+
+        .courseindex-sectioncontent:not(.delegated-section) {
+            .courseindex-item {
+                padding-left: $courseindex-item-padding-x * 3;
+            }
+        }
+        &.delegated-section {
+            width: 100%;
+        }
+    }
+
+    // General icons size.
+    .icon {
+        font-size: 10px;
+        margin-right: 0;
+    }
+
+    // Element visible only on editing mode.
+    .d-flex-noedit {
+        display: none;
+    }
+    &.editing {
+        .d-flex-noedit {
+            display: flex;
+        }
+    }
+
+    // Placeholders.
+    .placeholders {
+        .rounded-circle {
+            height: 1rem;
+            width: 1rem;
+        }
+
+        .w-100 {
+            height: 1rem;
+            margin: 0.5rem 0;
+        }
+    }
+}

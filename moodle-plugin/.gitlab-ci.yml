@@ -1,0 +1,31 @@
+image: docker:24
+
+services:
+  - docker:dind
+
+stages:
+  - build
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_HOST: tcp://docker:2375
+
+build_and_push:
+  stage: build
+
+  only:
+    - tags
+
+  script:
+    # Login to Docker Hub
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USER" --password-stdin
+
+    # Use GitLab tag as version
+    - IMAGE_TAG=$CI_COMMIT_TAG
+
+    # Build image
+    - docker build -t svanini/moodleflow:$IMAGE_TAG .
+
+    # Push image
+    - docker push svanini/moodleflow:$IMAGE_TAG
